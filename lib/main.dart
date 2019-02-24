@@ -1,21 +1,93 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_redux/flutter_redux.dart';
+import 'package:redux/redux.dart';
+import 'package:math_expressions/math_expressions.dart';
+
+
+abstract class Action {}
+
+class CalculateExpressionAction extends Action {}
+
+class ClearAction extends Action {}
+
+class InputExpressionAction extends Action {
+  final value;
+  InputExpressionAction(this.value);
+}
 
 
 typedef OnPressed = void Function();
+typedef OnClear = void Function();
+typedef OnButtonPressed = void Function(String);
+typedef OnCalculate = void Function();
 
 
-void main() => runApp(App());
+class CalculatorState {
+
+  String expression = '';
+
+  CalculatorState.initial();
+
+  String toString() => 'expression = $expression';
+
+}
+
+
+class ViewModel {
+  final String expression;
+  final OnButtonPressed onButtonPressed;
+  final OnCalculate onCalculate;
+  final OnClear onClear;
+  ViewModel({
+    this.expression,
+    this.onClear,
+    this.onButtonPressed,
+    this.onCalculate
+  });
+}
+
+
+CalculatorState reducer(CalculatorState state, dynamic action) {
+  print('Action: ${action.runtimeType}');
+  if (action is CalculateExpressionAction) {
+    try {
+      state.expression = (Parser().parse(state.expression)
+                                 .evaluate(EvaluationType.REAL, ContextModel()) as num)
+                                 .toStringAsFixed(0);
+    } catch(_) {
+      print('error: invalid expression !');
+    }
+  } else if (action is InputExpressionAction) {
+    print('value: ${action.value}');
+    state.expression += action.value;
+  } else if (action is ClearAction) {
+    state.expression = '';
+  }
+  print('state: $state');
+  return state;
+}
+
+
+void main() {
+  final store = Store<CalculatorState>(reducer, initialState: CalculatorState.initial());
+  runApp(App(store: store));
+}
 
 
 class App extends StatelessWidget {
 
+  final Store<CalculatorState> store;
+
+  App({this.store});
+
   @override
-  Widget build(BuildContext context) =>
-    MaterialApp(
+  Widget build(BuildContext context) => StoreProvider(
+    store: store,
+    child: MaterialApp(
       title: 'Калькулятор',
       home: Main(),
-    );
+    ),
+  );
 
 }
 
@@ -23,35 +95,34 @@ class App extends StatelessWidget {
 class Main extends StatelessWidget {
 
   @override
-  Widget build(BuildContext context) =>
-    Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.max,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            CalculatorInput(),
-            Expanded(
-              child: CalculatorButtons(),
-            ),
-          ],
-        ),
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Colors.black,
+    body: SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.max,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          CalculatorInput(),
+          Expanded(
+            child: CalculatorButtons(),
+          ),
+        ],
       ),
-    );
+    ),
+  );
 
 }
 
 
-class CalculatorInput extends  StatelessWidget{
+class CalculatorInput extends StatefulWidget {
 
-  final _border = OutlineInputBorder(
-    borderSide: BorderSide(
-      color: Colors.white,
-      width: 3,
-      style:BorderStyle.solid,
-    ),
-  );
+  @override
+  _CalculatorInputState createState() => _CalculatorInputState();
+
+}
+
+
+class _CalculatorInputState extends State<CalculatorInput> {
 
   final _textStyle = TextStyle(
     color: Colors.lightGreenAccent,
@@ -67,19 +138,25 @@ class CalculatorInput extends  StatelessWidget{
         horizontal: 20,
         vertical: 10,
       ),
-      child: TextFormField(
-        keyboardType: TextInputType.number,
-        cursorColor: Colors.lightGreen,
-        style: _textStyle,
-        decoration: InputDecoration(
-          hintText: "1+2",
-          hintStyle: _textStyle.copyWith(
-            color: Colors.white,
-          ),
-          enabledBorder: _border,
-          focusedBorder: _border.copyWith(
-            borderSide: _border.borderSide.copyWith(
-              color: Colors.lightGreenAccent,
+      child: StoreConnector<CalculatorState, ViewModel>(
+        converter: (Store<CalculatorState> store) => ViewModel(
+          expression: store.state.expression,
+          onClear: () => store.dispatch(ClearAction()),
+        ),
+        builder: (BuildContext context, ViewModel viewModel) => GestureDetector(
+          onDoubleTap: viewModel.onClear,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Colors.white,
+                width: 3,
+                style:BorderStyle.solid,
+              ),
+            ),
+            padding: EdgeInsets.all(20),
+            child: Text(
+              viewModel.expression,
+              style: _textStyle,
             ),
           ),
         ),
@@ -91,119 +168,110 @@ class CalculatorInput extends  StatelessWidget{
 
 class CalculatorButtons extends StatelessWidget {
 
-  final row1 = Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: <Widget>[
-      CalculatorButton(
-        title: '1',
-        onPressed: () => _onButtonPressed('1')
-      ),
-      CalculatorButton(
-        title: '2',
-        onPressed: () => _onButtonPressed('2')
-      ),
-      CalculatorButton(
-        title: '3',
-        onPressed: () => _onButtonPressed('3')
-      ),
-    ],
-  );
-
-  final row2 = Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: <Widget>[
-      CalculatorButton(
-        title: '4',
-        onPressed: () => _onButtonPressed('4')
-      ),
-      CalculatorButton(
-        title: '5',
-        onPressed: () => _onButtonPressed('5')
-      ),
-      CalculatorButton(
-        title: '6',
-        onPressed: () => _onButtonPressed('6')
-      ),
-    ],
-  );
-
-  final row3 = Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: <Widget>[
-      CalculatorButton(
-        title: '7',
-        onPressed: () => _onButtonPressed('7')
-      ),
-
-      CalculatorButton(
-        title: '8',
-        onPressed: () => _onButtonPressed('8')
-      ),
-      CalculatorButton(
-        title: '9',
-        onPressed: () => _onButtonPressed('9')
-      ),
-    ],
-  );
-
-  final row4 = Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: <Widget>[
-      CalculatorButton(
-        title: '0',
-        onPressed: () => _onButtonPressed('0')
-      ),
-     CalculatorButton(
-        title: '+',
-        onPressed: () => _onButtonPressed('+')
-      ),
-      CalculatorButton(
-        title: '-',
-        onPressed: () => _onButtonPressed('-')
-      ),
-    ],
-  );
-
-  final row5 = Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-    children: <Widget>[
-      CalculatorButton(
-        title: '*',
-        onPressed: () => _onButtonPressed('*')
-      ),
-      CalculatorButton(
-        title: '/',
-        onPressed: () => _onButtonPressed('/')
-      ),
-      CalculatorButton(
-        title: '=',
-        onPressed: () => _onButtonPressed('=')
-      ),
-    ],
-  );
-
   @override
   Widget build(BuildContext context) =>
     Container(
       padding: EdgeInsets.symmetric(
         horizontal: 20
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        mainAxisSize: MainAxisSize.max,
-        children: <Widget>[
-          row1,
-          row2,
-          row3,
-          row4,
-          row5,
-        ],
+      child: StoreConnector<CalculatorState, ViewModel>(
+        converter: (Store<CalculatorState> store) => ViewModel(
+          onButtonPressed: (String value) => store.dispatch(InputExpressionAction(value)),
+          onCalculate: () => store.dispatch(CalculateExpressionAction()),
+        ),
+        builder: (BuildContext buildContext, ViewModel viewModel) => Column(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          mainAxisSize: MainAxisSize.max,
+          children: <Widget>[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                CalculatorButton(
+                  title: '1',
+                  onPressed: () => viewModel.onButtonPressed('1')
+                ),
+                CalculatorButton(
+                  title: '2',
+                  onPressed: () => viewModel.onButtonPressed('2')
+                ),
+                CalculatorButton(
+                  title: '3',
+                  onPressed: () => viewModel.onButtonPressed('3')
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                CalculatorButton(
+                  title: '4',
+                  onPressed: () => viewModel.onButtonPressed('4')
+                ),
+                CalculatorButton(
+                  title: '5',
+                  onPressed: () => viewModel.onButtonPressed('5')
+                ),
+                CalculatorButton(
+                  title: '6',
+                  onPressed: () => viewModel.onButtonPressed('6')
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                CalculatorButton(
+                  title: '7',
+                  onPressed: () => viewModel.onButtonPressed('7')
+                ),
+                CalculatorButton(
+                  title: '8',
+                  onPressed: () => viewModel.onButtonPressed('8')
+                ),
+                CalculatorButton(
+                  title: '9',
+                  onPressed: () => viewModel.onButtonPressed('9')
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                CalculatorButton(
+                  title: '0',
+                  onPressed: () => viewModel.onButtonPressed('0')
+                ),
+                CalculatorButton(
+                  title: '+',
+                  onPressed: () => viewModel.onButtonPressed('+')
+                ),
+                CalculatorButton(
+                  title: '-',
+                  onPressed: () => viewModel.onButtonPressed('-')
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                CalculatorButton(
+                  title: '*',
+                  onPressed: () => viewModel.onButtonPressed('*')
+                ),
+                CalculatorButton(
+                  title: '/',
+                  onPressed: () => viewModel.onButtonPressed('/')
+                ),
+                CalculatorButton(
+                  title: '=',
+                  onPressed: () => viewModel.onCalculate()
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
-
-  static void _onButtonPressed(String title) {
-    print(title);
-  }
 
 }
 
